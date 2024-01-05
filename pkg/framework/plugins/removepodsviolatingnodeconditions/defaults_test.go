@@ -45,13 +45,13 @@ func TestSetDefaults_RemovePodsViolatingNodeConditionsArgs(t *testing.T) {
 				Namespaces:              &api.Namespaces{},
 				LabelSelector:           &metav1.LabelSelector{},
 				IncludePreferNoSchedule: false,
-				ExcludedConditions:      []string{"ExcludedTaints"},
+				ExcludedConditions:      []string{"ExcludedConditions"},
 			},
 			want: &RemovePodsViolatingNodeConditionsArgs{
 				Namespaces:              &api.Namespaces{},
 				LabelSelector:           &metav1.LabelSelector{},
 				IncludePreferNoSchedule: false,
-				ExcludedConditions:      []string{"ExcludedTaints"},
+				ExcludedConditions:      []string{"ExcludedConditions"},
 			},
 		},
 	}
