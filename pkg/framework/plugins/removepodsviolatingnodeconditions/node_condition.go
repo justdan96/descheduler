@@ -89,19 +89,37 @@ func (d *RemovePodsViolatingNodeConditions) Deschedule(ctx context.Context, node
 			}
 		}
 
-		// only evict if the node has conditions
+		// only evict if the node has conditions (except KubeletReady) that are True
+		drainCondition := false
 		conditions := node.Status.Conditions
-		total_conditions := len(conditions)
-		if total_conditions > 0 {
-			totalPods := len(pods)
-			// evict all the pods on this node
-			for i := 0; i < totalPods; i++ {
-				klog.V(2).InfoS("Evicting pod on node due to node conditions", "pod", klog.KObj(pods[i]), "node", klog.KObj(node))
-				d.handle.Evictor().Evict(ctx, pods[i], evictions.EvictOptions{})
-				if d.handle.Evictor().NodeLimitExceeded(node) {
-					break
+		totalConditions := len(conditions)
+		if totalConditions > 0 {
+			klog.V(5).InfoS("The node has the following node conditions", "node", klog.KObj(node))
+			for a := 0; a < totalConditions; a++ {
+				klog.V(5).InfoS("Condition has property", "Message", conditions[a].Message)
+				klog.V(5).InfoS("Condition has property", "Reason", conditions[a].Reason)
+				klog.V(5).InfoS("Condition has property", "Status", conditions[a].Status)
+				klog.V(5).InfoS("Condition has property", "Type", conditions[a].Type)
+				if conditions[a].Reason != "KubeletReady" && conditions[a].Status == "True" {
+					drainCondition = true
+					klog.V(3).InfoS("The node has a drain node condition!", "node", klog.KObj(node))
 				}
 			}
+
+			// we can drain this node
+			if drainCondition {
+				totalPods := len(pods)
+				// evict all the pods on this node
+				for i := 0; i < totalPods; i++ {
+					klog.V(3).InfoS("Evicting pod on node due to node conditions", "pod", klog.KObj(pods[i]), "node", klog.KObj(node))
+					d.handle.Evictor().Evict(ctx, pods[i], evictions.EvictOptions{})
+					if d.handle.Evictor().NodeLimitExceeded(node) {
+						break
+					}
+				}
+			}
+		} else {
+			klog.V(3).InfoS("The node has NO node conditions", "node", klog.KObj(node))
 		}
 	}
 
