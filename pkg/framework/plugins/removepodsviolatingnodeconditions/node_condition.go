@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
@@ -102,12 +103,24 @@ func (d *RemovePodsViolatingNodeConditions) Deschedule(ctx context.Context, node
 				klog.V(5).InfoS("Condition has property", "Type", conditions[a].Type)
 				if conditions[a].Reason != "KubeletReady" && conditions[a].Status == "True" {
 					drainCondition = true
-					klog.V(3).InfoS("The node has a drain node condition!", "node", klog.KObj(node))
+					klog.V(3).InfoS("The node has a drain condition!", "node", klog.KObj(node))
 				}
 			}
 
 			// we can drain this node
 			if drainCondition {
+				// descheduler does not cordon nodes at the moment - but we definitely want this for this plugin
+				if !node.Spec.Unschedulable {
+					var opts metav1.UpdateOptions
+					klog.V(3).InfoS("Cordoning node", "node", klog.KObj(node))
+					node.Spec.Unschedulable = true
+					if _, err := d.handle.ClientSet().CoreV1().Nodes().Update(ctx, node, opts); err != nil {
+						return &frameworktypes.Status{
+							Err: fmt.Errorf("error cordoning node: %v", node.Name),
+						}
+					}
+				}
+				// we will evict pods from this node
 				totalPods := len(pods)
 				// evict all the pods on this node
 				for i := 0; i < totalPods; i++ {
@@ -119,7 +132,8 @@ func (d *RemovePodsViolatingNodeConditions) Deschedule(ctx context.Context, node
 				}
 			}
 		} else {
-			klog.V(3).InfoS("The node has NO node conditions", "node", klog.KObj(node))
+			// pretty sure this would never happen but just in case we should warn on it
+			klog.Warningf("The node has NO node conditions! %s", node.Name)
 		}
 	}
 
